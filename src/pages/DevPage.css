@@ -1,0 +1,98 @@
+.checkin-page {
+  min-height: 100vh;
+  display: grid;
+  place-items: center;
+  padding: 24px 16px;
+}
+
+.checkin-card {
+  width: min(560px, 100%);
+  background: #ffffff;
+  border-radius: 16px;
+  padding: 20px;
+  box-shadow: 0 8px 30px rgba(15, 23, 42, 0.08);
+  display: grid;
+  gap: 14px;
+}
+
+.subtitle {
+  margin: 0;
+  color: #475569;
+}
+
+.primary-btn {
+  border: 0;
+  border-radius: 12px;
+  min-height: 44px;
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+  background: #2563eb;
+  color: #ffffff;
+}
+
+.primary-btn:disabled {
+  opacity: 0.7;
+  cursor: not-allowed;
+}
+
+.hint {
+  margin: 0;
+  font-size: 13px;
+  color: #64748b;
+}
+
+.error-box {
+  background: #fee2e2;
+  color: #991b1b;
+  border-radius: 10px;
+  padding: 10px 12px;
+  font-size: 14px;
+}
+
+.result-card {
+  border: 1px solid #cbd5e1;
+  border-radius: 12px;
+  padding: 12px;
+  display: grid;
+  gap: 10px;
+}
+
+.result-card h2 {
+  margin: 0;
+  font-size: 20px;
+}
+
+.result-card p {
+  margin: 0;
+}
+
+.owner-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.owner-row img {
+  border-radius: 50%;
+  object-fit: cover;
+  background: #f1f5f9;
+}
+
+.owner-name {
+  margin: 0;
+  font-weight: 700;
+}
+
+.owner-meta {
+  margin: 0;
+  color: #334155;
+  font-size: 14px;
+}
+
+.scanned-value {
+  margin: 0;
+  font-size: 13px;
+  color: #334155;
+  word-break: break-all;
+}
