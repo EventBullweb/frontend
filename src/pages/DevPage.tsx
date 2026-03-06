@@ -63,7 +63,7 @@ export default function DevPage() {
   const [isScannerSupported, setIsScannerSupported] = useState(false)
 
   useEffect(() => {
-    setIsScannerSupported(qrScanner.isSupported())
+    setIsScannerSupported(qrScanner.capture.isAvailable())
 
     return () => {
       if (qrScanner.isOpened()) {
@@ -134,7 +134,7 @@ export default function DevPage() {
   }
 
   const handleScanClick = async () => {
-    if (!qrScanner.isSupported()) {
+    if (!qrScanner.capture.isAvailable()) {
       setError('QR-сканер недоступен в текущем окружении Telegram Mini App.')
       return
     }
