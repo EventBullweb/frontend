@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useState } from 'react'
-import { qrScanner } from '@tma.js/sdk'
+import { useCallback, useEffect, useMemo, useState } from 'react'
+import { isTMA, qrScanner, retrieveLaunchParams } from '@tma.js/sdk'
 import './DevPage.css'
 
 type ActivateStatus = 'activated' | 'already_activated'
@@ -61,16 +61,37 @@ export default function DevPage() {
   const [error, setError] = useState('')
   const [isLoading, setIsLoading] = useState(false)
   const [isScannerSupported, setIsScannerSupported] = useState(false)
+  const [debugLines, setDebugLines] = useState<string[]>([])
+
+  const appendDebug = useCallback((message: string) => {
+    const line = `${new Date().toLocaleTimeString('ru-RU')}: ${message}`
+    console.info('[TMA debug]', line)
+    setDebugLines((previousLines) => [line, ...previousLines].slice(0, 12))
+  }, [])
 
   useEffect(() => {
-    setIsScannerSupported(qrScanner.capture.isAvailable())
+    const tmaDetected = isTMA()
+    const scannerAvailable = qrScanner.open.isAvailable()
+    setIsScannerSupported(scannerAvailable)
+    appendDebug(`isTMA(): ${String(tmaDetected)}`)
+    appendDebug(`qrScanner.open.isAvailable(): ${String(scannerAvailable)}`)
+
+    try {
+      const launchParams = retrieveLaunchParams()
+      const launchParamsString = JSON.stringify(launchParams)
+      appendDebug(`launch params: ${launchParamsString.slice(0, 220)}`)
+    } catch (launchParamsError) {
+      const launchParamsErrorMessage =
+        launchParamsError instanceof Error ? launchParamsError.message : String(launchParamsError)
+      appendDebug(`launch params error: ${launchParamsErrorMessage}`)
+    }
 
     return () => {
       if (qrScanner.isOpened()) {
         qrScanner.close()
       }
     }
-  }, [])
+  }, [appendDebug])
 
   const ownerAvatarSrc = useMemo(() => {
     if (!response?.owner.telegram_avatar_url) {
@@ -134,7 +155,10 @@ export default function DevPage() {
   }
 
   const handleScanClick = async () => {
-    if (!qrScanner.capture.isAvailable()) {
+    const scannerAvailable = qrScanner.open.isAvailable()
+    appendDebug(`click scan, qrScanner.open.isAvailable(): ${String(scannerAvailable)}`)
+
+    if (!scannerAvailable) {
       setError('QR-сканер недоступен в текущем окружении Telegram Mini App.')
       return
     }
@@ -149,13 +173,17 @@ export default function DevPage() {
       })
 
       if (!scannedQr) {
+        appendDebug('Сканер закрыт без результата.')
         return
       }
 
+      appendDebug(`QR получен: ${scannedQr.slice(0, 140)}`)
       setLastScannedValue(scannedQr)
       const extractedCode = extractTicketCode(scannedQr)
       await activateTicket(extractedCode)
-    } catch {
+    } catch (scanError) {
+      const scanErrorMessage = scanError instanceof Error ? scanError.message : String(scanError)
+      appendDebug(`Ошибка открытия сканера: ${scanErrorMessage}`)
       setError('Не удалось открыть QR-сканер. Проверьте запуск внутри Telegram.')
     }
   }
@@ -166,7 +194,7 @@ export default function DevPage() {
         <h1>QR check-in</h1>
         <p className="subtitle">Мини-апп только для сканирования билета.</p>
 
-        <button type="button" className="primary-btn" onClick={handleScanClick} disabled={isLoading || !isScannerSupported}>
+        <button type="button" className="primary-btn" onClick={handleScanClick} disabled={isLoading}>
           {isLoading ? 'Обработка...' : 'Сканировать QR'}
         </button>
 
@@ -181,6 +209,21 @@ export default function DevPage() {
         )}
 
         {error && <div className="error-box">{error}</div>}
+
+        <details className="debug-box">
+          <summary>TMA debug</summary>
+          {debugLines.length > 0 ? (
+            <div>
+              {debugLines.map((line) => (
+                <p key={line} className="debug-line">
+                  {line}
+                </p>
+              ))}
+            </div>
+          ) : (
+            <p className="debug-line">Логи пока пусты.</p>
+          )}
+        </details>
 
         {response && (
           <article className="result-card">

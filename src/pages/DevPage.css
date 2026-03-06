@@ -96,3 +96,23 @@
   color: #334155;
   word-break: break-all;
 }
+
+.debug-box {
+  border: 1px solid #cbd5e1;
+  border-radius: 10px;
+  padding: 8px 10px;
+  background: #f8fafc;
+}
+
+.debug-box summary {
+  cursor: pointer;
+  font-weight: 600;
+  color: #0f172a;
+}
+
+.debug-line {
+  margin: 8px 0 0;
+  font-size: 12px;
+  color: #334155;
+  word-break: break-word;
+}
