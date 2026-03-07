@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { isTMA, qrScanner, retrieveLaunchParams } from '@tma.js/sdk'
 import './DevPage.css'
 
-type ActivateStatus = 'activated' | 'already_activated'
+type ActivateStatus = 'activated' | 'already_activated' | 'not_found'
 
 interface Owner {
   telegram_id: number
@@ -13,11 +13,14 @@ interface Owner {
 
 interface ActivateTicketResponse {
   status: ActivateStatus
+  ticket_number?: string
+  lottery_code?: string | null
   activated_at: string | null
-  owner: Owner
+  owner?: Owner
 }
 
 const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL ?? '').replace(/\/$/, '')
+const TICKET_NUMBER_REGEX = /^\d{13}$/
 
 const DEFAULT_AVATAR_PLACEHOLDER =
   'data:image/svg+xml;utf8,' +
@@ -28,7 +31,7 @@ const DEFAULT_AVATAR_PLACEHOLDER =
   <path d="M20 82c4-14 16-22 28-22s24 8 28 22" fill="#8EA2D3" />
 </svg>`)
 
-function extractTicketCode(scannedValue: string): string {
+function extractTicketNumber(scannedValue: string): string {
   const raw = scannedValue.trim()
   if (!raw) {
     return ''
@@ -37,6 +40,7 @@ function extractTicketCode(scannedValue: string): string {
   try {
     const parsedUrl = new URL(raw)
     return (
+      parsedUrl.searchParams.get('ticket_number') ??
       parsedUrl.searchParams.get('ticket_code') ??
       parsedUrl.searchParams.get('code') ??
       parsedUrl.pathname.split('/').filter(Boolean).at(-1) ??
@@ -45,6 +49,10 @@ function extractTicketCode(scannedValue: string): string {
   } catch {
     return raw
   }
+}
+
+function isValidNewTicketNumber(value: string): boolean {
+  return TICKET_NUMBER_REGEX.test(value)
 }
 
 function formatActivatedAt(value: string | null): string {
@@ -94,7 +102,7 @@ export default function DevPage() {
   }, [appendDebug])
 
   const ownerAvatarSrc = useMemo(() => {
-    if (!response?.owner.telegram_avatar_url) {
+    if (!response?.owner?.telegram_avatar_url) {
       return DEFAULT_AVATAR_PLACEHOLDER
     }
 
@@ -110,14 +118,22 @@ export default function DevPage() {
       return 'Билет активирован'
     }
 
+    if (response.status === 'not_found') {
+      return 'Билет не найден'
+    }
+
     return 'Билет уже был активирован'
   }, [response])
 
-  const activateTicket = async (targetTicketCode: string) => {
-    const normalizedCode = targetTicketCode.trim()
+  const activateTicket = async (targetTicketNumber: string) => {
+    const normalizedTicketNumber = targetTicketNumber.trim()
 
-    if (!normalizedCode) {
-      setError('Пустой ticket_code после сканирования.')
+    if (!normalizedTicketNumber) {
+      setError('Пустой ticket_number после сканирования.')
+      return
+    }
+
+    if (!isValidNewTicketNumber(normalizedTicketNumber)) {
       return
     }
 
@@ -132,17 +148,14 @@ export default function DevPage() {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          ticket_code: normalizedCode,
+          ticket_number: normalizedTicketNumber,
+          ticket_code: normalizedTicketNumber,
         }),
       })
 
       const payload = (await apiResponse.json()) as ActivateTicketResponse | { detail?: string }
 
       if (!apiResponse.ok) {
-        if (apiResponse.status === 404) {
-          throw new Error((payload as { detail?: string }).detail ?? 'Ticket not found')
-        }
-
         throw new Error((payload as { detail?: string }).detail ?? 'Не удалось активировать билет.')
       }
 
@@ -168,7 +181,8 @@ export default function DevPage() {
     try {
       const scannedQr = await qrScanner.capture({
         capture(scannedValue) {
-          return Boolean(scannedValue.trim())
+          const extractedTicketNumber = extractTicketNumber(scannedValue)
+          return isValidNewTicketNumber(extractedTicketNumber)
         },
       })
 
@@ -179,8 +193,13 @@ export default function DevPage() {
 
       appendDebug(`QR получен: ${scannedQr.slice(0, 140)}`)
       setLastScannedValue(scannedQr)
-      const extractedCode = extractTicketCode(scannedQr)
-      await activateTicket(extractedCode)
+      const extractedTicketNumber = extractTicketNumber(scannedQr)
+
+      if (!isValidNewTicketNumber(extractedTicketNumber)) {
+        return
+      }
+      
+      await activateTicket(extractedTicketNumber)
     } catch (scanError) {
       const scanErrorMessage = scanError instanceof Error ? scanError.message : String(scanError)
       appendDebug(`Ошибка открытия сканера: ${scanErrorMessage}`)
@@ -228,18 +247,30 @@ export default function DevPage() {
         {response && (
           <article className="result-card">
             <h2>{statusLabel}</h2>
+            {response.ticket_number && (
+              <p>
+                Номер билета: <strong>{response.ticket_number}</strong>
+              </p>
+            )}
+            {response.status === 'activated' && response.lottery_code && (
+              <p>
+                Lottery code: <strong>{response.lottery_code}</strong>
+              </p>
+            )}
             <p>
               Время первого прохода: <strong>{formatActivatedAt(response.activated_at)}</strong>
             </p>
 
-            <div className="owner-row">
-              <img src={ownerAvatarSrc} alt={response.owner.full_name} width={64} height={64} />
-              <div>
-                <p className="owner-name">{response.owner.full_name}</p>
-                <p className="owner-meta">@{response.owner.username ?? 'username отсутствует'}</p>
-                <p className="owner-meta">ID: {response.owner.telegram_id}</p>
+            {response.owner && (
+              <div className="owner-row">
+                <img src={ownerAvatarSrc} alt={response.owner.full_name} width={64} height={64} />
+                <div>
+                  <p className="owner-name">{response.owner.full_name}</p>
+                  <p className="owner-meta">@{response.owner.username ?? 'username отсутствует'}</p>
+                  <p className="owner-meta">ID: {response.owner.telegram_id}</p>
+                </div>
               </div>
-            </div>
+            )}
           </article>
         )}
       </section>
