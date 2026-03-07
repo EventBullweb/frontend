@@ -167,7 +167,6 @@ export default function DevPage() {
   const [isLoading, setIsLoading] = useState(false)
   const [isStatsLoading, setIsStatsLoading] = useState(false)
   const [isScannerSupported, setIsScannerSupported] = useState(false)
-  const [debugLines, setDebugLines] = useState<string[]>([])
   const [statsSyncError, setStatsSyncError] = useState('')
   const [backendStats, setBackendStats] = useState<BackendStats | null>(null)
   const [scanHistory, setScanHistory] = useState<ScanHistoryItem[]>([])
@@ -182,7 +181,6 @@ export default function DevPage() {
   const appendDebug = useCallback((message: string) => {
     const line = `${new Date().toLocaleTimeString('ru-RU')}: ${message}`
     console.info('[TMA debug]', line)
-    setDebugLines((previousLines) => [line, ...previousLines].slice(0, 12))
   }, [])
 
   const syncCheckinStats = useCallback(async () => {
@@ -392,8 +390,8 @@ export default function DevPage() {
       <section className="checkin-card">
         <header className="checkin-header">
           <div>
-            <h1>QR check-in</h1>
-            <p className="subtitle">Сканирование билетов на входе, без авторизации.</p>
+            <h1>Билетёр QR-кодов</h1>
+            <p className="subtitle">Сканирование билетов</p>
           </div>
           <div className="stats-grid">
             <article className="stats-item">
@@ -449,21 +447,6 @@ export default function DevPage() {
 
         {error && <div className="error-box">{error}</div>}
 
-        <details className="debug-box">
-          <summary>TMA debug</summary>
-          {debugLines.length > 0 ? (
-            <div>
-              {debugLines.map((line) => (
-                <p key={line} className="debug-line">
-                  {line}
-                </p>
-              ))}
-            </div>
-          ) : (
-            <p className="debug-line">Логи пока пусты.</p>
-          )}
-        </details>
-
         {response && (
           <article className={`result-card result-${response.status}`}>
             <h2>{getStatusTitle(response.status)}</h2>
@@ -473,11 +456,7 @@ export default function DevPage() {
                 Номер билета: <strong>{response.ticket_number}</strong>
               </p>
             )}
-            {response.status === 'activated' && response.lottery_code && (
-              <p>
-                Lottery code: <strong>{response.lottery_code}</strong>
-              </p>
-            )}
+            
             <p>
               Время первого прохода: <strong>{formatActivatedAt(response.activated_at)}</strong>
             </p>
