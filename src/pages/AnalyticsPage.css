@@ -31,6 +31,32 @@
   color: #475569;
 }
 
+.analytics-actions {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.analytics-action-btn {
+  border: 1px solid #c7d2fe;
+  background: #eef2ff;
+  color: #1e3a8a;
+  border-radius: 10px;
+  min-height: 36px;
+  padding: 0 12px;
+  cursor: pointer;
+  font-weight: 600;
+}
+
+.analytics-action-btn:hover:enabled {
+  background: #e0e7ff;
+}
+
+.analytics-action-btn:disabled {
+  opacity: 0.7;
+  cursor: not-allowed;
+}
+
 .analytics-error {
   background: #fee2e2;
   color: #991b1b;

@@ -66,10 +66,26 @@ function formatNumber(value: number): string {
   return new Intl.NumberFormat('ru-RU').format(value)
 }
 
+function getFileNameFromDisposition(contentDisposition: string | null): string | null {
+  if (!contentDisposition) {
+    return null
+  }
+
+  const utfMatch = contentDisposition.match(/filename\*=UTF-8''([^;]+)/i)
+  if (utfMatch?.[1]) {
+    return decodeURIComponent(utfMatch[1].replace(/['"]/g, '').trim())
+  }
+
+  const basicMatch = contentDisposition.match(/filename="?([^"]+)"?/i)
+  return basicMatch?.[1]?.trim() ?? null
+}
+
 export default function AnalyticsPage() {
   const [data, setData] = useState<ProjectDetailedStats | null>(null)
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState('')
+  const [downloadError, setDownloadError] = useState('')
+  const [activeDownload, setActiveDownload] = useState<'lottery' | 'analytics' | null>(null)
 
   useEffect(() => {
     const fetchAnalytics = async () => {
@@ -99,6 +115,41 @@ export default function AnalyticsPage() {
 
   const topSteps = useMemo(() => data?.answers.top_steps ?? [], [data])
 
+  const downloadFile = async (
+    path: string,
+    fallbackName: string,
+    downloadType: 'lottery' | 'analytics',
+  ) => {
+    setDownloadError('')
+    setActiveDownload(downloadType)
+
+    try {
+      const response = await fetch(`${API_BASE_URL}${path}`)
+      if (!response.ok) {
+        throw new Error('Не удалось скачать файл.')
+      }
+
+      const blob = await response.blob()
+      const contentDisposition = response.headers.get('Content-Disposition')
+      const filename = getFileNameFromDisposition(contentDisposition) ?? fallbackName
+
+      const objectUrl = URL.createObjectURL(blob)
+      const link = document.createElement('a')
+      link.href = objectUrl
+      link.download = filename
+      document.body.append(link)
+      link.click()
+      link.remove()
+      URL.revokeObjectURL(objectUrl)
+    } catch (requestError) {
+      const errorMessage =
+        requestError instanceof Error ? requestError.message : 'Ошибка скачивания файла.'
+      setDownloadError(errorMessage)
+    } finally {
+      setActiveDownload(null)
+    }
+  }
+
   if (isLoading) {
     return (
       <main className="analytics-page">
@@ -127,6 +178,27 @@ export default function AnalyticsPage() {
         <header className="analytics-header">
           <h1>Статистика события</h1>
           <p className="analytics-hint">Короткая сводка по регистрации, билетам, анкетам и рассылкам.</p>
+          <div className="analytics-actions">
+            <button
+              type="button"
+              className="analytics-action-btn"
+              onClick={() =>
+                void downloadFile('/eksport/lotereynye-bilety', 'lotereynye-bilety.xlsx', 'lottery')
+              }
+              disabled={activeDownload !== null}
+            >
+              {activeDownload === 'lottery' ? 'Скачиваем...' : 'Скачать лотерейные билеты'}
+            </button>
+            <button
+              type="button"
+              className="analytics-action-btn"
+              onClick={() => void downloadFile('/eksport/analitika', 'analitika.xlsx', 'analytics')}
+              disabled={activeDownload !== null}
+            >
+              {activeDownload === 'analytics' ? 'Скачиваем...' : 'Скачать аналитику'}
+            </button>
+          </div>
+          {downloadError && <div className="analytics-error">{downloadError}</div>}
         </header>
 
         <section className="analytics-section">
