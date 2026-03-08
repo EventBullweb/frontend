@@ -125,12 +125,12 @@ export default function AnalyticsPage() {
     <main className="analytics-page">
       <section className="analytics-card">
         <header className="analytics-header">
-          <h1>Аналитика проекта</h1>
-          <p className="analytics-hint">Данные из endpoint `GET /stats/project-detailed`</p>
+          <h1>Статистика события</h1>
+          <p className="analytics-hint">Короткая сводка по регистрации, билетам, анкетам и рассылкам.</p>
         </header>
 
         <section className="analytics-section">
-          <h2>Totals</h2>
+          <h2>Общая картина</h2>
           <div className="analytics-grid">
             <article className="analytics-item">
               <span>Посетители</span>
@@ -160,7 +160,7 @@ export default function AnalyticsPage() {
         </section>
 
         <section className="analytics-section">
-          <h2>Funnel</h2>
+          <h2>Путь посетителя</h2>
           <div className="analytics-grid">
             <article className="analytics-item">
               <span>Посетителей всего</span>
@@ -179,26 +179,26 @@ export default function AnalyticsPage() {
               <strong>{formatNumber(data.funnel.tickets_activated)}</strong>
             </article>
             <article className="analytics-item">
-              <span>Completion rate</span>
+              <span>Прошли регистрацию</span>
               <strong>{formatPercent(data.funnel.registration_completion_rate)}</strong>
             </article>
             <article className="analytics-item">
-              <span>Issue rate</span>
+              <span>Получили билет после регистрации</span>
               <strong>{formatPercent(data.funnel.ticket_issue_rate_from_completed)}</strong>
             </article>
             <article className="analytics-item">
-              <span>Activation rate (issued)</span>
+              <span>Активировали среди выданных билетов</span>
               <strong>{formatPercent(data.funnel.ticket_activation_rate_from_issued)}</strong>
             </article>
             <article className="analytics-item">
-              <span>Activation rate (visitors)</span>
+              <span>Активировали от всех посетителей</span>
               <strong>{formatPercent(data.funnel.ticket_activation_rate_from_visitors)}</strong>
             </article>
           </div>
         </section>
 
         <section className="analytics-section">
-          <h2>Tickets</h2>
+          <h2>Билеты</h2>
           <div className="analytics-grid">
             <article className="analytics-item">
               <span>Всего ожидается</span>
@@ -213,58 +213,64 @@ export default function AnalyticsPage() {
               <strong>{formatNumber(data.tickets.not_activated)}</strong>
             </article>
             <article className="analytics-item">
-              <span>С lottery_code</span>
+              <span>С лотерейным кодом</span>
               <strong>{formatNumber(data.tickets.with_lottery_code)}</strong>
             </article>
             <article className="analytics-item">
-              <span>Без lottery_code</span>
+              <span>Без лотерейного кода</span>
               <strong>{formatNumber(data.tickets.without_lottery_code)}</strong>
             </article>
           </div>
         </section>
 
         <section className="analytics-section">
-          <h2>Answers</h2>
+          <h2>Анкеты</h2>
           <div className="analytics-grid">
             <article className="analytics-item">
               <span>Всего ответов</span>
               <strong>{formatNumber(data.answers.total_answers)}</strong>
             </article>
             <article className="analytics-item">
-              <span>Уникальные респонденты</span>
+              <span>Уникальные участники</span>
               <strong>{formatNumber(data.answers.unique_respondents)}</strong>
             </article>
             <article className="analytics-item">
-              <span>Среднее ответов на респондента</span>
+              <span>Среднее ответов на участника</span>
               <strong>{data.answers.average_answers_per_respondent.toFixed(2)}</strong>
             </article>
           </div>
 
           <div className="analytics-table-wrap">
-            <h3>Top steps</h3>
+            <h3>Популярные вопросы анкеты</h3>
             <table className="analytics-table">
               <thead>
                 <tr>
-                  <th>Step</th>
+                  <th>Вопрос</th>
                   <th>Ответов</th>
                   <th>Уникальных посетителей</th>
                 </tr>
               </thead>
               <tbody>
-                {topSteps.map((step) => (
-                  <tr key={step.step_key}>
-                    <td>{step.step_label}</td>
-                    <td>{formatNumber(step.answers_count)}</td>
-                    <td>{formatNumber(step.unique_visitors)}</td>
+                {topSteps.length > 0 ? (
+                  topSteps.map((step) => (
+                    <tr key={step.step_key}>
+                      <td>{step.step_label}</td>
+                      <td>{formatNumber(step.answers_count)}</td>
+                      <td>{formatNumber(step.unique_visitors)}</td>
+                    </tr>
+                  ))
+                ) : (
+                  <tr>
+                    <td colSpan={3}>Нет данных по вопросам анкеты.</td>
                   </tr>
-                ))}
+                )}
               </tbody>
             </table>
           </div>
         </section>
 
         <section className="analytics-section">
-          <h2>Broadcast</h2>
+          <h2>Рассылки</h2>
           <div className="analytics-grid">
             <article className="analytics-item">
               <span>Всего доставок</span>
