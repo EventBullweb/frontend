@@ -25,15 +25,6 @@ const TICKET_NUMBER_REGEX = /^\d{13}$/
 const EXPECTED_TOTAL_FROM_ENV = Number.parseInt(import.meta.env.VITE_EXPECTED_GUESTS ?? '', 10)
 const EXPECTED_TOTAL = Number.isNaN(EXPECTED_TOTAL_FROM_ENV) ? null : EXPECTED_TOTAL_FROM_ENV
 
-const DEFAULT_AVATAR_PLACEHOLDER =
-  'data:image/svg+xml;utf8,' +
-  encodeURIComponent(`
-<svg xmlns="http://www.w3.org/2000/svg" width="96" height="96" viewBox="0 0 96 96">
-  <rect width="96" height="96" rx="48" fill="#DCE3F5" />
-  <circle cx="48" cy="38" r="16" fill="#8EA2D3" />
-  <path d="M20 82c4-14 16-22 28-22s24 8 28 22" fill="#8EA2D3" />
-</svg>`)
-
 function extractTicketNumber(scannedValue: string): string {
   const raw = scannedValue.trim()
   if (!raw) {
@@ -82,23 +73,6 @@ function getStatusTitle(status: ActivateStatus): string {
     return 'Уже был активирован'
   }
   return 'Билет не найден'
-}
-
-function getStatusDescription(status: ActivateStatus): string {
-  if (status === 'activated') {
-    return 'Гость только что прошел check-in.'
-  }
-  if (status === 'already_activated') {
-    return 'Это повторное сканирование, первый проход уже зафиксирован.'
-  }
-  return 'Проверьте корректность QR-кода или номер билета.'
-}
-
-function getAvatarSrc(owner?: Owner): string {
-  if (!owner?.telegram_avatar_url) {
-    return DEFAULT_AVATAR_PLACEHOLDER
-  }
-  return `${API_BASE_URL}${owner.telegram_avatar_url}`
 }
 
 interface ActivationResult {
@@ -161,7 +135,6 @@ function parseBackendStats(payload: unknown): BackendStats {
 }
 
 export default function DevPage() {
-  const [lastScannedValue, setLastScannedValue] = useState('')
   const [response, setResponse] = useState<ActivationResult | null>(null)
   const [error, setError] = useState('')
   const [isLoading, setIsLoading] = useState(false)
@@ -235,9 +208,10 @@ export default function DevPage() {
     void syncCheckinStats()
   }, [syncCheckinStats])
 
-  const ownerAvatarSrc = useMemo(() => getAvatarSrc(response?.owner), [response])
   const displayedExpected = backendStats?.expected ?? stats.expected
   const displayedActivated = backendStats?.activated ?? stats.activated
+  const displayedExpectedRemaining =
+    displayedExpected !== null ? Math.max(displayedExpected - displayedActivated, 0) : null
   const progress = useMemo(() => {
     if (!displayedExpected || displayedExpected <= 0) {
       return null
@@ -369,7 +343,6 @@ export default function DevPage() {
       }
 
       appendDebug(`QR получен: ${scannedQr.slice(0, 140)}`)
-      setLastScannedValue(scannedQr)
       const extractedTicketNumber = extractTicketNumber(scannedQr)
 
       if (!isValidNewTicketNumber(extractedTicketNumber)) {
@@ -396,7 +369,7 @@ export default function DevPage() {
           <div className="stats-grid">
             <article className="stats-item">
               <span className="stats-label">Ожидается</span>
-              <strong>{displayedExpected ?? '—'}</strong>
+              <strong>{displayedExpectedRemaining ?? '—'}</strong>
             </article>
             <article className="stats-item">
               <span className="stats-label">Уже активировано</span>
@@ -439,41 +412,17 @@ export default function DevPage() {
           <p className="hint">QR-сканер работает только внутри Telegram Mini App.</p>
         )}
 
-        {lastScannedValue && (
-          <p className="scanned-value">
-            Сканировано: <code>{lastScannedValue}</code>
-          </p>
-        )}
-
         {error && <div className="error-box">{error}</div>}
 
         {response && (
           <article className={`result-card result-${response.status}`}>
-            <h2>{getStatusTitle(response.status)}</h2>
-            <p className="status-description">{getStatusDescription(response.status)}</p>
-            {response.ticket_number && (
-              <p>
-                Номер билета: <strong>{response.ticket_number}</strong>
-              </p>
-            )}
-            
+            <h2>Результат сканирования</h2>
             <p>
-              Время первого прохода: <strong>{formatActivatedAt(response.activated_at)}</strong>
+              Дата активации: <strong>{formatActivatedAt(response.activated_at)}</strong>
             </p>
-
-            <div className="owner-row">
-              <img
-                src={ownerAvatarSrc}
-                alt={response.owner?.full_name ?? 'Владелец билета'}
-                width={64}
-                height={64}
-              />
-              <div>
-                <p className="owner-name">{response.owner?.full_name ?? 'Данные владельца недоступны'}</p>
-                <p className="owner-meta">@{response.owner?.username ?? 'username отсутствует'}</p>
-                <p className="owner-meta">ID: {response.owner?.telegram_id ?? '—'}</p>
-              </div>
-            </div>
+            <p>
+              Имя пользователя: <strong>{response.owner?.full_name ?? 'Данные владельца недоступны'}</strong>
+            </p>
           </article>
         )}
 
