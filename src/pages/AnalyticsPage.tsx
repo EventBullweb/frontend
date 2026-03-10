@@ -1,65 +1,40 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useState } from 'react'
 import './AnalyticsPage.css'
 
-interface TotalsStats {
-  visitors: number
-  registrations_completed: number
-  tickets: number
-  activated_tickets: number
-  visitor_answers: number
-  broadcast_deliveries: number
-}
+/**
+ * API: GET {API_BASE_URL}/stats/project-detailed
+ * Ожидается один JSON-объект с полями (все number): started_bot, started_registration,
+ * left_contact, registration_completed, tickets_issued, opened_my_ticket, tickets_annulled,
+ * attended_qr_scan, lottery_participants.
+ * Конверсии на фронте: 2/1, 3/2, 6/5, 9/8 (%). Ожидаемые гости: opened_my_ticket - tickets_annulled.
+ */
 
-interface FunnelStats {
-  visitors_total: number
-  registrations_completed: number
+/** Ответ API с данными воронки: от входа в бота до участия в мероприятии */
+export interface FunnelStatsResponse {
+  /** Запустили бота (Start) */
+  started_bot: number
+  /** Начали регистрацию (отправили имя) */
+  started_registration: number
+  /** Оставили контакт (телефон) */
+  left_contact: number
+  /** Регистрация завершена */
+  registration_completed: number
+  /** Билетов выдано */
   tickets_issued: number
-  tickets_activated: number
-  registration_completion_rate: number
-  ticket_issue_rate_from_completed: number
-  ticket_activation_rate_from_issued: number
-  ticket_activation_rate_from_visitors: number
-}
-
-interface TicketsStats {
-  expected: number
-  already_activated: number
-  not_activated: number
-  with_lottery_code: number
-  without_lottery_code: number
-}
-
-interface TopStep {
-  step_key: string
-  step_label: string
-  answers_count: number
-  unique_visitors: number
-}
-
-interface AnswersStats {
-  total_answers: number
-  unique_respondents: number
-  average_answers_per_respondent: number
-  top_steps: TopStep[]
-}
-
-interface BroadcastStats {
-  total_deliveries: number
-  unique_recipients: number
-}
-
-interface ProjectDetailedStats {
-  totals: TotalsStats
-  funnel: FunnelStats
-  tickets: TicketsStats
-  answers: AnswersStats
-  broadcast: BroadcastStats
+  /** Открыли раздел «Мой билет» */
+  opened_my_ticket: number
+  /** Аннулировали билет */
+  tickets_annulled: number
+  /** Пришли на мероприятие (QR-скан) */
+  attended_qr_scan: number
+  /** Участники розыгрыша */
+  lottery_participants: number
 }
 
 const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL ?? '/api/v1').replace(/\/$/, '')
 
 function formatPercent(value: number): string {
-  return `${value.toFixed(2)}%`
+  return `${value.toFixed(1)}%`
 }
 
 function formatNumber(value: number): string {
@@ -80,8 +55,71 @@ function getFileNameFromDisposition(contentDisposition: string | null): string |
   return basicMatch?.[1]?.trim() ?? null
 }
 
+/** Один этап воронки для отображения */
+interface FunnelStepRow {
+  step: number
+  label: string
+  count: number
+  conversionFromPrevious: number | null
+}
+
+function buildFunnelSteps(d: FunnelStatsResponse): FunnelStepRow[] {
+  const expectedGuests = Math.max(0, d.opened_my_ticket - d.tickets_annulled)
+
+  const conv = (current: number, previous: number) =>
+    previous > 0 ? (current / previous) * 100 : null
+
+  return [
+    { step: 1, label: 'Запустили бота (Start)', count: d.started_bot, conversionFromPrevious: null },
+    {
+      step: 2,
+      label: 'Начали регистрацию',
+      count: d.started_registration,
+      conversionFromPrevious: conv(d.started_registration, d.started_bot),
+    },
+    {
+      step: 3,
+      label: 'Оставили контакт (телефон)',
+      count: d.left_contact,
+      conversionFromPrevious: conv(d.left_contact, d.started_registration),
+    },
+    {
+      step: 4,
+      label: 'Регистрация завершена',
+      count: d.registration_completed,
+      conversionFromPrevious: null,
+    },
+    { step: 5, label: 'Билетов выдано', count: d.tickets_issued, conversionFromPrevious: null },
+    {
+      step: 6,
+      label: 'Открыли раздел «Мой билет»',
+      count: d.opened_my_ticket,
+      conversionFromPrevious: conv(d.opened_my_ticket, d.tickets_issued),
+    },
+    { step: 7, label: 'Аннулировали билет', count: d.tickets_annulled, conversionFromPrevious: null },
+    {
+      step: 8,
+      label: 'Ожидаемых гостей',
+      count: expectedGuests,
+      conversionFromPrevious: null,
+    },
+    {
+      step: 9,
+      label: 'Пришли на мероприятие (QR-скан)',
+      count: d.attended_qr_scan,
+      conversionFromPrevious: conv(d.attended_qr_scan, expectedGuests),
+    },
+    {
+      step: 10,
+      label: 'Участники розыгрыша',
+      count: d.lottery_participants,
+      conversionFromPrevious: null,
+    },
+  ]
+}
+
 export default function AnalyticsPage() {
-  const [data, setData] = useState<ProjectDetailedStats | null>(null)
+  const [data, setData] = useState<FunnelStatsResponse | null>(null)
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState('')
   const [downloadError, setDownloadError] = useState('')
@@ -100,7 +138,7 @@ export default function AnalyticsPage() {
           throw new Error('Не удалось получить данные аналитики.')
         }
 
-        setData(payload as ProjectDetailedStats)
+        setData(payload as FunnelStatsResponse)
       } catch (requestError) {
         const errorMessage =
           requestError instanceof Error ? requestError.message : 'Сетевая ошибка при загрузке аналитики.'
@@ -113,7 +151,7 @@ export default function AnalyticsPage() {
     void fetchAnalytics()
   }, [])
 
-  const topSteps = useMemo(() => data?.answers.top_steps ?? [], [data])
+  const funnelSteps = data ? buildFunnelSteps(data) : []
 
   const downloadFile = async (
     path: string,
@@ -176,8 +214,10 @@ export default function AnalyticsPage() {
     <main className="analytics-page">
       <section className="analytics-card">
         <header className="analytics-header">
-          <h1>Статистика события</h1>
-          <p className="analytics-hint">Короткая сводка по регистрации, билетам, анкетам и рассылкам.</p>
+          <h1>Воронка мероприятия</h1>
+          <p className="analytics-hint">
+            Путь посетителя от входа в бота до участия в мероприятии.
+          </p>
           <div className="analytics-actions">
             <button
               type="button"
@@ -201,158 +241,24 @@ export default function AnalyticsPage() {
           {downloadError && <div className="analytics-error">{downloadError}</div>}
         </header>
 
-        <section className="analytics-section">
-          <h2>Общая картина</h2>
-          <div className="analytics-grid">
-            <article className="analytics-item">
-              <span>Посетители</span>
-              <strong>{formatNumber(data.totals.visitors)}</strong>
-            </article>
-            <article className="analytics-item">
-              <span>Завершили регистрацию</span>
-              <strong>{formatNumber(data.totals.registrations_completed)}</strong>
-            </article>
-            <article className="analytics-item">
-              <span>Билеты</span>
-              <strong>{formatNumber(data.totals.tickets)}</strong>
-            </article>
-            <article className="analytics-item">
-              <span>Активированные билеты</span>
-              <strong>{formatNumber(data.totals.activated_tickets)}</strong>
-            </article>
-            <article className="analytics-item">
-              <span>Ответы анкет</span>
-              <strong>{formatNumber(data.totals.visitor_answers)}</strong>
-            </article>
-            <article className="analytics-item">
-              <span>Доставки рассылок</span>
-              <strong>{formatNumber(data.totals.broadcast_deliveries)}</strong>
-            </article>
-          </div>
-        </section>
-
-        <section className="analytics-section">
-          <h2>Путь посетителя</h2>
-          <div className="analytics-grid">
-            <article className="analytics-item">
-              <span>Посетителей всего</span>
-              <strong>{formatNumber(data.funnel.visitors_total)}</strong>
-            </article>
-            <article className="analytics-item">
-              <span>Завершили регистрацию</span>
-              <strong>{formatNumber(data.funnel.registrations_completed)}</strong>
-            </article>
-            <article className="analytics-item">
-              <span>Билетов выдано</span>
-              <strong>{formatNumber(data.funnel.tickets_issued)}</strong>
-            </article>
-            <article className="analytics-item">
-              <span>Билетов активировано</span>
-              <strong>{formatNumber(data.funnel.tickets_activated)}</strong>
-            </article>
-            <article className="analytics-item">
-              <span>Прошли регистрацию</span>
-              <strong>{formatPercent(data.funnel.registration_completion_rate)}</strong>
-            </article>
-            <article className="analytics-item">
-              <span>Получили билет после регистрации</span>
-              <strong>{formatPercent(data.funnel.ticket_issue_rate_from_completed)}</strong>
-            </article>
-            <article className="analytics-item">
-              <span>Активировали среди выданных билетов</span>
-              <strong>{formatPercent(data.funnel.ticket_activation_rate_from_issued)}</strong>
-            </article>
-            <article className="analytics-item">
-              <span>Активировали от всех посетителей</span>
-              <strong>{formatPercent(data.funnel.ticket_activation_rate_from_visitors)}</strong>
-            </article>
-          </div>
-        </section>
-
-        <section className="analytics-section">
-          <h2>Билеты</h2>
-          <div className="analytics-grid">
-            <article className="analytics-item">
-              <span>Всего ожидается</span>
-              <strong>{formatNumber(data.tickets.expected)}</strong>
-            </article>
-            <article className="analytics-item">
-              <span>Уже активировано</span>
-              <strong>{formatNumber(data.tickets.already_activated)}</strong>
-            </article>
-            <article className="analytics-item">
-              <span>Не активировано</span>
-              <strong>{formatNumber(data.tickets.not_activated)}</strong>
-            </article>
-            <article className="analytics-item">
-              <span>С лотерейным кодом</span>
-              <strong>{formatNumber(data.tickets.with_lottery_code)}</strong>
-            </article>
-            <article className="analytics-item">
-              <span>Без лотерейного кода</span>
-              <strong>{formatNumber(data.tickets.without_lottery_code)}</strong>
-            </article>
-          </div>
-        </section>
-
-        <section className="analytics-section">
-          <h2>Анкеты</h2>
-          <div className="analytics-grid">
-            <article className="analytics-item">
-              <span>Всего ответов</span>
-              <strong>{formatNumber(data.answers.total_answers)}</strong>
-            </article>
-            <article className="analytics-item">
-              <span>Уникальные участники</span>
-              <strong>{formatNumber(data.answers.unique_respondents)}</strong>
-            </article>
-            <article className="analytics-item">
-              <span>Среднее ответов на участника</span>
-              <strong>{data.answers.average_answers_per_respondent.toFixed(2)}</strong>
-            </article>
-          </div>
-
-          <div className="analytics-table-wrap">
-            <h3>Популярные вопросы анкеты</h3>
-            <table className="analytics-table">
-              <thead>
-                <tr>
-                  <th>Вопрос</th>
-                  <th>Ответов</th>
-                  <th>Уникальных посетителей</th>
-                </tr>
-              </thead>
-              <tbody>
-                {topSteps.length > 0 ? (
-                  topSteps.map((step) => (
-                    <tr key={step.step_key}>
-                      <td>{step.step_label}</td>
-                      <td>{formatNumber(step.answers_count)}</td>
-                      <td>{formatNumber(step.unique_visitors)}</td>
-                    </tr>
-                  ))
-                ) : (
-                  <tr>
-                    <td colSpan={3}>Нет данных по вопросам анкеты.</td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
-          </div>
-        </section>
-
-        <section className="analytics-section">
-          <h2>Рассылки</h2>
-          <div className="analytics-grid">
-            <article className="analytics-item">
-              <span>Всего доставок</span>
-              <strong>{formatNumber(data.broadcast.total_deliveries)}</strong>
-            </article>
-            <article className="analytics-item">
-              <span>Уникальные получатели</span>
-              <strong>{formatNumber(data.broadcast.unique_recipients)}</strong>
-            </article>
-          </div>
+        <section className="analytics-section analytics-funnel">
+          <h2>Этапы воронки</h2>
+          <ol className="funnel-list">
+            {funnelSteps.map((row) => (
+              <li key={row.step} className="funnel-step">
+                <span className="funnel-step-num">{row.step}</span>
+                <div className="funnel-step-content">
+                  <span className="funnel-step-label">{row.label}</span>
+                  <span className="funnel-step-count">{formatNumber(row.count)} чел.</span>
+                  {row.conversionFromPrevious !== null && (
+                    <span className="funnel-step-conversion">
+                      Конверсия {formatPercent(row.conversionFromPrevious)}
+                    </span>
+                  )}
+                </div>
+              </li>
+            ))}
+          </ol>
         </section>
       </section>
     </main>

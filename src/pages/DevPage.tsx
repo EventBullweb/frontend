@@ -21,7 +21,7 @@ interface ActivateTicketResponse {
 }
 
 const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL ?? '/api/v1').replace(/\/$/, '')
-const TICKET_NUMBER_REGEX = /^\d{13}$/
+const TICKET_NUMBER_REGEX = /^[A-Z]{2}-\d{4}$/
 const EXPECTED_TOTAL_FROM_ENV = Number.parseInt(import.meta.env.VITE_EXPECTED_GUESTS ?? '', 10)
 const EXPECTED_TOTAL = Number.isNaN(EXPECTED_TOTAL_FROM_ENV) ? null : EXPECTED_TOTAL_FROM_ENV
 
@@ -47,6 +47,10 @@ function extractTicketNumber(scannedValue: string): string {
 
 function isValidNewTicketNumber(value: string): boolean {
   return TICKET_NUMBER_REGEX.test(value)
+}
+
+function normalizeTicketNumber(value: string): string {
+  return value.trim().toUpperCase()
 }
 
 function formatActivatedAt(value: string | null): string {
@@ -220,7 +224,7 @@ export default function DevPage() {
   }, [displayedActivated, displayedExpected])
 
   const activateTicket = async (targetTicketNumber: string) => {
-    const normalizedTicketNumber = targetTicketNumber.trim()
+    const normalizedTicketNumber = normalizeTicketNumber(targetTicketNumber)
 
     if (!normalizedTicketNumber) {
       setError('Пустой ticket_code после сканирования.')
@@ -332,7 +336,7 @@ export default function DevPage() {
     try {
       const scannedQr = await qrScanner.capture({
         capture(scannedValue) {
-          const extractedTicketNumber = extractTicketNumber(scannedValue)
+          const extractedTicketNumber = normalizeTicketNumber(extractTicketNumber(scannedValue))
           return isValidNewTicketNumber(extractedTicketNumber)
         },
       })
@@ -343,7 +347,7 @@ export default function DevPage() {
       }
 
       appendDebug(`QR получен: ${scannedQr.slice(0, 140)}`)
-      const extractedTicketNumber = extractTicketNumber(scannedQr)
+      const extractedTicketNumber = normalizeTicketNumber(extractTicketNumber(scannedQr))
 
       if (!isValidNewTicketNumber(extractedTicketNumber)) {
         setError('QR считан, но ticket_code не похож на валидный код билета.')
